@@ -105,6 +105,7 @@ There are multiple SDK breaking changes since v0.49.3. For the quickest migratio
 - Off-by-one error in bash output "earlier lines" count caused by counting spacing newline as hidden content ([#921](https://github.com/badlogic/pi-mono/issues/921))
 - User package filters now layer on top of manifest filters instead of replacing them ([#645](https://github.com/badlogic/pi-mono/issues/645))
 - Auto-retry now handles "terminated" errors from Codex API mid-stream failures
+- Fixed auto-retry counter accumulating across LLM calls. Previously, within a single tool-use turn, rate limit retries would accumulate (e.g., 3 separate 429s would show "3/3" even if each retry succeeded). Now the counter resets after each successful LLM response.
 - Follow-up queue (Alt+Enter) now sends full paste content instead of `[paste #N ...]` markers ([#912](https://github.com/badlogic/pi-mono/issues/912))
 - Fixed Alt-Up not restoring messages queued during compaction ([#923](https://github.com/badlogic/pi-mono/pull/923) by [@aliou](https://github.com/aliou))
 - Fixed session corruption when loading empty or invalid session files via `--session` flag ([#932](https://github.com/badlogic/pi-mono/issues/932) by [@armanddp](https://github.com/armanddp))

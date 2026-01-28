@@ -354,6 +354,19 @@ export class AgentSession {
 			// Track assistant message for auto-compaction (checked on agent_end)
 			if (event.message.role === "assistant") {
 				this._lastAssistantMessage = event.message;
+
+				// Reset retry counter on successful (non-error) assistant message
+				// This must happen here, not at agent_end, because tool-use turns
+				// make multiple LLM calls and we need to reset after each success
+				if (event.message.stopReason !== "error" && this._retryAttempt > 0) {
+					this._emit({
+						type: "auto_retry_end",
+						success: true,
+						attempt: this._retryAttempt,
+					});
+					this._retryAttempt = 0;
+					this._resolveRetry();
+				}
 			}
 		}
 
@@ -366,16 +379,17 @@ export class AgentSession {
 			if (this._isRetryableError(msg)) {
 				const didRetry = await this._handleRetryableError(msg);
 				if (didRetry) return; // Retry was initiated, don't proceed to compaction
-			} else if (this._retryAttempt > 0) {
-				// Previous retry succeeded - emit success event and reset counter
-				this._emit({
-					type: "auto_retry_end",
-					success: true,
-					attempt: this._retryAttempt,
-				});
+			} else {
+				// Any successful assistant message resets the retry counter
+				if (this._retryAttempt > 0) {
+					this._emit({
+						type: "auto_retry_end",
+						success: true,
+						attempt: this._retryAttempt,
+					});
+					this._resolveRetry();
+				}
 				this._retryAttempt = 0;
-				// Resolve the retry promise so waitForRetry() completes
-				this._resolveRetry();
 			}
 
 			await this._checkCompaction(msg);
@@ -714,6 +728,13 @@ export class AgentSession {
 				`No API key found for ${this.model.provider}.\n\n` +
 					`Use /login or set an API key environment variable. See ${join(getDocsPath(), "authentication.md")}`,
 			);
+		}
+
+		// Reset retry counter for new user prompts (not retries)
+		// This prevents retry failures from accumulating across separate prompts
+		if (this._retryAttempt > 0) {
+			this._retryAttempt = 0;
+			this._resolveRetry();
 		}
 
 		// Check if we need to compact before sending (catches aborted responses)
